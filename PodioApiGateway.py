@@ -3,9 +3,17 @@ from datetime import datetime
 from pymongo import MongoClient, DESCENDING, ASCENDING
 import httpx, asyncio, time
 import PodioAPIWorkTEMP as fs
-# comment
+
+"""
+FastAPI application for handling Podio webhooks, event queue processing, and MongoDB interactions.
+"""
 app = FastAPI()
 
+"""
+Podio API credentials dictionary.
+- Multiple credentials are used to distribute API calls and avoid rate limits.
+- Credentials are rotated after a certain number of requests.
+"""
 podio_creds = {
     1: {
         'user': 'podio_user',
@@ -33,11 +41,18 @@ podio_creds = {
     }
 }
 
+"""
+MongoDB connection string. Replace with actual connection details.
+"""
 mongo_connection_string = 'mongo_db_connect_string'
-org_id = 1078713
+org_id = 1234567
 base_url = 'https://api.podio.com/'
+secret_no = 1
 
 async def update_podio_creds():
+    """
+    Rotates Podio API credentials to distribute request load and avoid hitting rate limits.
+    """
     count = 0
     secret_no = (secret_no + 1) % len(podio_creds.keys())
     username = podio_creds[secret_no]['user']
@@ -46,18 +61,27 @@ async def update_podio_creds():
     client_secret = podio_creds[secret_no]['client_secret']
     return [count, secret_no, username, password, client_id, client_secret]
 
-# Helper function to verify hooks
 async def verify_hook(data):
+    """
+    Sends a verification request to Podio for webhook validation.
+    """
     hook_id = data['hook_id']
     url = f'https://api.podio.com/hook/{hook_id}/verify/validate'
+
     async with httpx.AsyncClient() as client:
         response = await client.post(url, json=data)
         return response.status_code
 
 async def to_do_event_queue_add(data: dict, failed_attempts: int):
+    """
+    Adds an event to the MongoDB 'to_do_event_queue' collection.
+    - Tracks failed attempts for retry logic.
+    - Stores a timestamp for when the event was added.
+    """
     client = MongoClient(mongo_connection_string)
     data['failed_attempts'] = failed_attempts
     data['timestamp'] = datetime.today().strftime('%Y-%m-%d %H:%M:%S.%f')
+
     db = client.test
     collection = db.to_do_event_queue
     collection.insert_one(data)
@@ -65,6 +89,14 @@ async def to_do_event_queue_add(data: dict, failed_attempts: int):
     print(f'Added {data['item_id']} to "to_do_event_queue".')
 
 async def complete_to_do_event_queue_docs(count, secret_no, podio_creds):
+    """
+    Processes events from 'to_do_event_queue' in MongoDB.
+    - Retrieves item details from Podio.
+    - Updates the MongoDB 'podio_items' collection with the latest data.
+    - Moves completed events to 'completed_event_queue'.
+    - Deletes processed events from 'to_do_event_queue'.
+    """
+
     if count == 990:
         count, secret_no, username, password, client_id, client_secret = await update_podio_creds()
         podio = fs.PodioAPI(base_url, org_id, username, password, client_id, client_secret)
@@ -77,6 +109,13 @@ async def complete_to_do_event_queue_docs(count, secret_no, podio_creds):
         podio = fs.PodioAPI(base_url, org_id, username, password, client_id, client_secret)
 
     async def process_event(data: dict, count):
+        """
+        Processes a single event from the queue.
+        - Retrieves item details from Podio.
+        - Updates the MongoDB database with the latest state.
+        - Moves completed events to 'completed_event_queue'.
+        - Handles API failures by retrying up to 10 times.
+        """
         start = time.time()
         if data['type'] in ['item.update', 'item.create']:
             count += 1
@@ -158,6 +197,12 @@ async def complete_to_do_event_queue_docs(count, secret_no, podio_creds):
 @app.post("/item/update")
 @app.get("/item/update")
 async def item_update(request: Request):
+    """
+    Handles Podio item update events.
+    - Adds 'item.update' events to the queue.
+    - Verifies webhooks if required.
+    """
+
     form_data = await request.form()
     data = {key: value for key, value in form_data.items()}
 
@@ -189,6 +234,7 @@ async def item_update(request: Request):
 #     return {'status': 'item.delete processed'}
 
 # /app/create route
+
 @app.post("/app/create")
 @app.get("/app/create")
 async def item_delete(request: Request):

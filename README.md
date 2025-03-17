@@ -1,5 +1,19 @@
-# CRM-ETL-Pipeline
-The purpose of this pipeline is to replace the ETL pipeline currently in use by my company.  The current pipeline was to save all data from the CRM (Podio) inside a MySQL 5.7 production server.  Then using Azure  the production server would load into a SQL 8.0 AdHoc server.
-The issue with the current pipeline is only about 85% of the information was successfully saved and moved.  The cost associated with it was astronomical for the accuracy.  The current pipeline relies on Podio automation that is "In Beta" per Podio and was tagged as/
-shouldn't be relied on to be 100% accurate.  Using Python to create a gateway using rest APIs I will be able to create a pub/sub queue of information that will be queried from Podio and sent to a MongoDB to be saved as a new production database.  This will fix the accuracy issue.
-Later on I will want to create an ETL to move the data from the production to the AdHoc database without using Azure this will fix the associated cost issue.  The main challenge I see with this is Podio has not updated their wrapper in 15 years.  I will have to make my own wrapper.
+# CRM-ETL-Pipeline  
+
+## Overview  
+This project aims to replace my company’s existing ETL pipeline for extracting, transforming, and loading (ETL) data from our CRM (Podio). The current setup saves data from Podio into a **MySQL 5.7 production server**, which is then transferred to a **SQL 8.0 AdHoc server** via Azure.  
+
+### Issues with the Current Pipeline  
+- **Data Accuracy**: Only about **85% of the data** is successfully saved and transferred.  
+- **High Costs**: The reliance on Azure significantly increases operational expenses.  
+- **Unreliable Automation**: The current pipeline depends on Podio’s built-in automation, which is still **in beta** and not guaranteed to be **100% reliable**.  
+
+### Solution  
+Using **Python** and **REST APIs**, I will build a **pub/sub queue system** to retrieve data from Podio and store it in **MongoDB** as a new production database. This approach will:  
+    Improve **data accuracy**  
+    Reduce **operational costs**  
+    Eliminate dependency on **Podio’s unreliable automation**  
+
+### Future Improvements  
+- Develop an **ETL pipeline** to transfer data from the **new MongoDB production database** to the **AdHoc database**—**without** relying on Azure, further reducing costs.  
+- Since Podio has **not updated its API wrapper in 15 years**, I will need to **build a custom wrapper** for better integration.  

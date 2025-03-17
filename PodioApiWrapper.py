@@ -8,8 +8,10 @@ logging.basicConfig(level=logging.ERROR)
 
 class PodioAPI:
     '''
-    This Class object will serve as a Podio wrapper. It can use api access to get info from Podio. This can get the data structure info 2x daily to/
-    adjust the MongoDB based on any fields being added/deleted/name_changed.  It can also pull actual data from Podio then clean it to get the field label and field value to return to MongoDB
+    A wrapper for the Podio API, allowing interaction with Podio to retrieve and process data.
+
+    1. Fetches Podio data structure information (recommended twice daily) to update MongoDB if fields are added, deleted, or renamed.
+    2. Retrieves actual data from Podio, processes it, and extracts field labels and values before inserting them into MongoDB.
     '''
     def __init__(self, base_url, org_id, username, password, client_id, client_secret):
         self.api_count = 0
@@ -25,7 +27,7 @@ class PodioAPI:
         
     def get_access_token(self):
         '''
-        Get Podio auth token for API use
+        Retrieves an authentication token from Podio to allow API interactions.
         '''
         auth_url = self.base_url + 'oauth/token'
         response = requests.post(auth_url, data={
@@ -42,7 +44,7 @@ class PodioAPI:
 
     def clean_item(self, item):
         '''
-        This is the item cleaner for actual data from Podio.  The cleaning is slightly different between cleaning actual data and cleaning data structure data
+        Cleans and processes actual data retrieved from Podio. This differs from cleaning data structure metadata. Converts various field types to readable formats.
         '''
         if not item:
             return None
@@ -101,13 +103,12 @@ class PodioAPI:
 
     def get_filtered_items(self, app_id, filters):
         '''
-        Resource intensive.  Can only run about 15 consecutive API calls in a minute.  250 API calls in an hour.  Can add sleep func to get past the per minute limit. Can also adjust so every API call it moves the token credentials to a new API token.  This should give enough API calls to run correctly.  This will take a parameter dict to fiter info from Podio and return up to 500 items that match the parameter.  This then uses an offest to continue calling for the rest of the results.  Then cleans and returns
-        {
-            field label: 
-                {
-                    field_label: field_value
-                    }
-            }
+        Fetches filtered items from Podio based on given filter parameters.
+
+        Rate limits: Podio allows only ~15 consecutive API calls per minute (250 per hour).
+        Implements offset-based pagination to retrieve all matching items (up to 500 per call).
+        Can switch API tokens to bypass rate limits or introduce delays.
+        Returns a dictionary formatted as { item_id: { field_label: field_value } }.
         '''
         self.formatted_app_id = str(app_id)
         # if not self.access_token:
@@ -167,7 +168,9 @@ class PodioAPI:
 
     def get_org(self):
         '''
-        Non resource intensive.  Can run 1000 API calls an hour no per minute/5minute rates.  This will get the space data structure info.
+        Fetches the organizational structure from Podio, including spaces.
+
+        Low resource usage: Up to 1000 API calls per hour with no per-minute rate limits.
         '''
         url = f'{self.base_url}org/{self.org_id}/all_spaces'
         headers = {
@@ -181,7 +184,8 @@ class PodioAPI:
 
     def get_apps_in_space(self, space_id):
         '''
-        Non resource intensive.  Can run 1000 API calls an hour no per minute/5minute rates. This will get the apps data structure info for a space.
+        Low resource usage: Up to 1000 API calls per hour.
+        Returns a list of tuples (space_app_id, app_name).
         '''
         url = self.base_url + f'app/space/{space_id}/'
         headers = {
@@ -202,7 +206,10 @@ class PodioAPI:
     
     def get_app_fields_data(self, app_id):
         '''
-        Non resource intensive.  Can run 1000 API calls an hour no per minute/5minute rates. This will get the fields data structure info for an app.
+        Retrieves metadata about fields in a specific Podio app.
+
+        Low resource usage: Up to 1000 API calls per hour.
+        Returns a dictionary { field_id: { field_label, field_type, return_type, hidden } }.
         '''
         url = self.base_url + f'app/{app_id}'
         headers = {
@@ -231,7 +238,11 @@ class PodioAPI:
 
     def get_podio_system_setup(self):
         '''
-        Non resource intensive.  This will go through and get all data structure info for every app in every space of a single organization inside of Podio.  It currently takes 380 API calls to run this method(10/10/2024).  If we go above 1000 API calls to run this method we can add a switch to change the API creds with every call.  A single user can have 5 API creds.  This will give a total of 5000 non resource intensive API calls an hour. 
+        Retrieves the complete data structure of all apps within a Podio organization.
+
+        API Usage: Currently requires ~380 API calls (as of 10/10/2024).
+        If API calls exceed 1000, credentials can be rotated (up to 5 sets for 5000 calls/hour).
+        Returns a nested dictionary { space_name: { app_name: { app_id, fields } } }.
         '''
         print('Getting spaces in organization')
         org_response = self.get_org()  # Getting spaces in organization
@@ -258,7 +269,11 @@ class PodioAPI:
 
     def get_podio_item_values(self, item_id):
         '''
-        Resource intensive.  Can only run about 15 consecutive API calls in a minute.  250 API calls in an hour.  Can add sleep func to get past the per minute limit. Can also adjust so every API call it moves the token credentials to a new API token.  This should give enough API calls to run correctly.  This will get a single item's data from Podio then cleans and returns {field label: field value}
+        Retrieves and processes data for a single Podio item.
+
+        Rate limits: ~15 API calls per minute (250 per hour).
+        Implements token rotation and optional delays to bypass limits.
+        Returns { field_label: field_value } after processing.
         '''
         if not self.access_token:
             self.access_token = self.get_access_token()
@@ -279,6 +294,12 @@ class PodioAPI:
             return None
 
     def create_hook(self, url, ref_type, ref_id, event_type):
+        '''
+        Creates a webhook in Podio to trigger events.
+
+        Requires url, ref_type, ref_id, and event_type.
+        Returns the webhook creation response.
+        '''
         # self.access_token = self.get_app_access_token()
         data = {
             'ref_type': ref_type,
